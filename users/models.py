@@ -56,3 +56,40 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     def __str__(self):
         return self.name or self.phone
+
+
+class ExecutorProfile(models.Model):
+    MAX_CATEGORIES = 5
+    MAX_PORTFOLIO_PHOTOS = 20
+
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="executor_profile")
+    categories = models.ManyToManyField("catalog.Category", related_name="executors", blank=True)
+    districts = models.ManyToManyField("catalog.District", related_name="executors", blank=True)
+    photo = models.ImageField(upload_to="executors/photos/", blank=True)
+    about = models.TextField(_("about"), max_length=1000, blank=True)
+    experience_years = models.PositiveSmallIntegerField(null=True, blank=True)
+    available_now = models.BooleanField(default=False)
+
+    # Updated from reviews and finished tasks, not edited by the user.
+    rating = models.DecimalField(max_digits=3, decimal_places=2, default=0)
+    reviews_count = models.PositiveIntegerField(default=0)
+    completed_count = models.PositiveIntegerField(default=0)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = _("executor profile")
+        verbose_name_plural = _("executor profiles")
+
+    def __str__(self):
+        return str(self.user)
+
+
+class PortfolioPhoto(models.Model):
+    profile = models.ForeignKey(ExecutorProfile, on_delete=models.CASCADE, related_name="portfolio")
+    image = models.ImageField(upload_to="executors/portfolio/")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
