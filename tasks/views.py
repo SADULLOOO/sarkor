@@ -9,9 +9,12 @@ from rest_framework.response import Response
 from core.exceptions import WrongStatus
 from core.models import PlatformSettings
 from core.pagination import NewestFirstPagination
+from users.permissions import IsExecutor
 
+from . import services
+from .models import Response as TaskResponse
 from .models import Task
-from .serializers import TaskPhotoSerializer, TaskSerializer, TaskWriteSerializer
+from .serializers import ResponseSerializer, TaskPhotoSerializer, TaskSerializer, TaskWriteSerializer
 
 
 def tasks_with_details():
@@ -62,6 +65,8 @@ class TaskViewSet(
             return TaskWriteSerializer
         if self.action == "add_photo":
             return TaskPhotoSerializer
+        if self.action == "responses":
+            return ResponseSerializer
         return TaskSerializer
 
     def create(self, request, *args, **kwargs):
@@ -107,6 +112,37 @@ class TaskViewSet(
         photo = get_object_or_404(task.photos, pk=photo_id)
         photo.image.delete(save=False)
         photo.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=True, methods=["get", "post"])
+    def responses(self, request, pk=None):
+        task = self.get_object()
+
+        if request.method == "POST":
+            if not IsExecutor().has_permission(request, self):
+                raise PermissionDenied(IsExecutor.message)
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            response = services.create_response(task.pk, request.user, **serializer.validated_data)
+            return Response(self.get_serializer(response).data, status=status.HTTP_201_CREATED)
+
+        if task.customer_id == request.user.id:
+            verified_only = request.query_params.get("verified_only") == "true"
+            queryset = services.responses_for_customer(task, verified_only=verified_only)
+        else:
+            # Executors see only their own response.
+            queryset = task.responses.filter(executor=request.user)
+
+        queryset = queryset.prefetch_related("executor__executor_profile__portfolio")
+        return Response(self.get_serializer(queryset, many=True).data)
+
+    @action(detail=True, methods=["delete"], url_path=r"responses/(?P<response_id>\d+)")
+    def withdraw_response(self, request, pk=None, response_id=None):
+        task = self.get_object()
+        response = get_object_or_404(task.responses, pk=response_id, executor=request.user)
+        if response.status != TaskResponse.Status.PENDING or task.status != Task.Status.OPEN:
+            raise WrongStatus
+        response.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     def _get_own_open_task(self):

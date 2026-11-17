@@ -5,8 +5,9 @@ from rest_framework import serializers
 from catalog.models import Category, District
 from catalog.serializers import CategorySerializer, DistrictSerializer
 from core.validators import validate_image_size
+from users.models import User
 
-from .models import Task, TaskPhoto
+from .models import Response, Task, TaskPhoto
 
 
 class TaskPhotoSerializer(serializers.ModelSerializer):
@@ -112,3 +113,45 @@ class TaskWriteSerializer(serializers.ModelSerializer):
 
         attrs["type"] = Task.Type.URGENT if timing == Task.Timing.URGENT else Task.Type.ONE_OFF
         return attrs
+
+
+class ResponseExecutorSerializer(serializers.Serializer):
+    """Executor card inside a response: trust level and what is missing in the profile."""
+
+    def _url(self, file):
+        request = self.context.get("request")
+        return request.build_absolute_uri(file.url) if request else file.url
+
+    def to_representation(self, user):
+        profile = getattr(user, "executor_profile", None)
+        missing = []
+        if not profile or not profile.photo:
+            missing.append("photo")
+        if not profile or not profile.reviews_count:
+            missing.append("reviews")
+        if user.trust_level not in (User.TrustLevel.VERIFIED, User.TrustLevel.RELIABLE):
+            missing.append("verification")
+
+        data = {
+            "id": user.id,
+            "name": user.name,
+            "trust_level": user.trust_level,
+            "photo": self._url(profile.photo) if profile and profile.photo else None,
+            "rating": str(profile.rating) if profile else "0.00",
+            "reviews_count": profile.reviews_count if profile else 0,
+            "completed_count": profile.completed_count if profile else 0,
+            "missing": missing,
+        }
+        # Portfolio is shown only for a filled profile and higher.
+        if profile and user.trust_level != User.TrustLevel.NEWBIE:
+            data["portfolio"] = [self._url(photo.image) for photo in profile.portfolio.all()[:6]]
+        return data
+
+
+class ResponseSerializer(serializers.ModelSerializer):
+    executor = ResponseExecutorSerializer(read_only=True)
+
+    class Meta:
+        model = Response
+        fields = ["id", "executor", "price", "comment", "status", "created_at"]
+        read_only_fields = ["status"]
