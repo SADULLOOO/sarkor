@@ -14,7 +14,13 @@ from users.permissions import IsExecutor
 from . import services
 from .models import Response as TaskResponse
 from .models import Task
-from .serializers import ResponseSerializer, TaskPhotoSerializer, TaskSerializer, TaskWriteSerializer
+from .serializers import (
+    ResponseSerializer,
+    SelectExecutorSerializer,
+    TaskPhotoSerializer,
+    TaskSerializer,
+    TaskWriteSerializer,
+)
 
 
 def tasks_with_details():
@@ -144,6 +150,35 @@ class TaskViewSet(
             raise WrongStatus
         response.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=True, methods=["post"])
+    def select(self, request, pk=None):
+        serializer = SelectExecutorSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        task = services.select_executor(
+            self.get_object().pk, request.user, serializer.validated_data["response"]
+        )
+        return Response(self._read(task))
+
+    @action(detail=True, methods=["post"])
+    def start(self, request, pk=None):
+        task = services.start_task(self.get_object().pk, request.user)
+        return Response(self._read(task))
+
+    @action(detail=True, methods=["post"])
+    def complete(self, request, pk=None):
+        task = services.complete_task(self.get_object().pk, request.user)
+        return Response(self._read(task))
+
+    @action(detail=True, methods=["post"])
+    def cancel(self, request, pk=None):
+        task = services.cancel_task(self.get_object().pk, request.user)
+        return Response(self._read(task))
+
+    @action(detail=True, methods=["post"], url_path="no-show")
+    def no_show(self, request, pk=None):
+        task = services.report_no_show(self.get_object().pk, request.user)
+        return Response(self._read(task))
 
     def _get_own_open_task(self):
         task = self.get_object()

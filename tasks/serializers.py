@@ -155,3 +155,7 @@ class ResponseSerializer(serializers.ModelSerializer):
         model = Response
         fields = ["id", "executor", "price", "comment", "status", "created_at"]
         read_only_fields = ["status"]
+
+
+class SelectExecutorSerializer(serializers.Serializer):
+    response = serializers.IntegerField()
