@@ -1,6 +1,16 @@
 from django.utils.translation import gettext as _
-from rest_framework.exceptions import ValidationError
+from django.utils.translation import gettext_lazy
+from rest_framework import status
+from rest_framework.exceptions import APIException, ValidationError
 from rest_framework.views import exception_handler
+
+
+class WrongStatus(APIException):
+    """The object exists, but the action is not allowed in its current status."""
+
+    status_code = status.HTTP_409_CONFLICT
+    default_detail = gettext_lazy("This action is not available now.")
+    default_code = "wrong_status"
 
 
 def api_exception_handler(exc, context):
