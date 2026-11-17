@@ -9,12 +9,18 @@ from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from . import services
+from .models import ExecutorProfile, PortfolioPhoto
+from .permissions import IsExecutor
+from .profile import refresh_trust_level
 from .serializers import (
     AuthUserSerializer,
+    ExecutorProfileSerializer,
     LogoutSerializer,
     MeSerializer,
     OtpRequestSerializer,
     OtpVerifySerializer,
+    PortfolioPhotoSerializer,
+    PublicExecutorSerializer,
 )
 
 
@@ -88,3 +94,57 @@ class MeView(generics.RetrieveUpdateAPIView):
 
     def get_object(self):
         return self.request.user
+
+    def perform_update(self, serializer):
+        user = serializer.save()
+        refresh_trust_level(user)
+
+
+class MyExecutorProfileView(generics.RetrieveUpdateAPIView):
+    serializer_class = ExecutorProfileSerializer
+    permission_classes = [IsExecutor]
+    http_method_names = ["get", "patch"]
+
+    def get_object(self):
+        profile, _created = ExecutorProfile.objects.get_or_create(user=self.request.user)
+        return profile
+
+    def perform_update(self, serializer):
+        serializer.save()
+        refresh_trust_level(self.request.user)
+
+
+class PortfolioPhotoListView(generics.CreateAPIView):
+    serializer_class = PortfolioPhotoSerializer
+    permission_classes = [IsExecutor]
+
+    def perform_create(self, serializer):
+        profile, _created = ExecutorProfile.objects.get_or_create(user=self.request.user)
+        if profile.portfolio.count() >= ExecutorProfile.MAX_PORTFOLIO_PHOTOS:
+            raise ValidationError(
+                {"image": [_("Max %(max)s photos.") % {"max": ExecutorProfile.MAX_PORTFOLIO_PHOTOS}]}
+            )
+        serializer.save(profile=profile)
+        refresh_trust_level(self.request.user)
+
+
+class PortfolioPhotoDetailView(generics.DestroyAPIView):
+    permission_classes = [IsExecutor]
+
+    def get_queryset(self):
+        return PortfolioPhoto.objects.filter(profile__user=self.request.user)
+
+    def perform_destroy(self, instance):
+        instance.image.delete(save=False)
+        instance.delete()
+        refresh_trust_level(self.request.user)
+
+
+class ExecutorDetailView(generics.RetrieveAPIView):
+    serializer_class = PublicExecutorSerializer
+    lookup_field = "user_id"
+    queryset = (
+        ExecutorProfile.objects.filter(user__is_executor=True, user__is_blocked=False, user__is_active=True)
+        .select_related("user")
+        .prefetch_related("categories", "districts", "portfolio")
+    )

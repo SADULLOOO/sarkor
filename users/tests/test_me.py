@@ -1,23 +1,8 @@
 import pytest
-from rest_framework_simplejwt.tokens import RefreshToken
-
-from users.models import User
 
 pytestmark = pytest.mark.django_db
 
 URL = "/api/v1/me"
-
-
-@pytest.fixture
-def user():
-    return User.objects.create_user("+992901234567")
-
-
-@pytest.fixture
-def auth_client(api_client, user):
-    token = RefreshToken.for_user(user).access_token
-    api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
-    return api_client
 
 
 def test_requires_auth(api_client):
