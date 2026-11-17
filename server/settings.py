@@ -118,6 +118,7 @@ REST_FRAMEWORK = {
     ],
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
+        "users.permissions.IsNotBlocked",
     ],
     "EXCEPTION_HANDLER": "core.exceptions.api_exception_handler",
 }

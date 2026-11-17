@@ -20,3 +20,13 @@ class AuthUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ["id", "phone", "name", "language", "is_customer", "is_executor", "trust_level"]
+
+
+class MeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = AuthUserSerializer.Meta.fields + ["date_joined"]
+        read_only_fields = ["id", "phone", "trust_level", "date_joined"]
+
+    def validate_name(self, value):
+        return value.strip()

@@ -1,6 +1,6 @@
 from django.contrib.auth.models import update_last_login
 from django.utils.translation import gettext as _
-from rest_framework import status
+from rest_framework import generics, status
 from rest_framework.exceptions import PermissionDenied, Throttled, ValidationError
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
@@ -9,7 +9,13 @@ from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from . import services
-from .serializers import AuthUserSerializer, LogoutSerializer, OtpRequestSerializer, OtpVerifySerializer
+from .serializers import (
+    AuthUserSerializer,
+    LogoutSerializer,
+    MeSerializer,
+    OtpRequestSerializer,
+    OtpVerifySerializer,
+)
 
 
 class OtpRequestView(APIView):
@@ -74,3 +80,11 @@ class LogoutView(APIView):
             raise ValidationError({"refresh": [_("Invalid or expired token.")]}) from exc
 
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class MeView(generics.RetrieveUpdateAPIView):
+    serializer_class = MeSerializer
+    http_method_names = ["get", "patch"]
+
+    def get_object(self):
+        return self.request.user
