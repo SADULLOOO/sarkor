@@ -1,6 +1,10 @@
+from decimal import Decimal
+
 from .models import ExecutorProfile, User
 
 PROFILE_FILLED_THRESHOLD = 80
+RELIABLE_MIN_COMPLETED = 10
+RELIABLE_MIN_RATING = Decimal("4.5")
 
 # What makes an executor profile "complete" and how much each part is worth.
 COMPLETENESS_WEIGHTS = {
@@ -28,19 +32,31 @@ def get_completeness(profile: ExecutorProfile) -> tuple[int, list[str]]:
     return percent, missing
 
 
-def refresh_trust_level(user: User) -> None:
-    """Move the user between "newbie" and "profile filled".
+def _is_reliable(profile: ExecutorProfile | None) -> bool:
+    # TODO: also require "no confirmed complaints in 90 days" once complaints exist.
+    return (
+        profile is not None
+        and profile.completed_count >= RELIABLE_MIN_COMPLETED
+        and profile.rating >= RELIABLE_MIN_RATING
+    )
 
-    Higher levels (verified, reliable) and "caution" are set by other rules,
-    so we don't touch them here.
+
+def refresh_trust_level(user: User) -> None:
+    """Recalculate the levels that depend only on the profile and the work history.
+
+    "Verified" is given by a moderator after the passport check and "caution"
+    by complaints/antifraud, so here we only move inside these pairs:
+    newbie <-> profile filled, verified <-> reliable.
     """
-    auto_levels = {User.TrustLevel.NEWBIE, User.TrustLevel.PROFILE_FILLED}
-    if user.trust_level not in auto_levels:
+    if user.trust_level == User.TrustLevel.CAUTION:
         return
 
     profile = getattr(user, "executor_profile", None)
-    is_filled = profile is not None and get_completeness(profile)[0] >= PROFILE_FILLED_THRESHOLD
-    new_level = User.TrustLevel.PROFILE_FILLED if is_filled else User.TrustLevel.NEWBIE
+    if user.trust_level in (User.TrustLevel.VERIFIED, User.TrustLevel.RELIABLE):
+        new_level = User.TrustLevel.RELIABLE if _is_reliable(profile) else User.TrustLevel.VERIFIED
+    else:
+        is_filled = profile is not None and get_completeness(profile)[0] >= PROFILE_FILLED_THRESHOLD
+        new_level = User.TrustLevel.PROFILE_FILLED if is_filled else User.TrustLevel.NEWBIE
 
     if user.trust_level != new_level:
         user.trust_level = new_level

@@ -7,7 +7,7 @@ from catalog.serializers import CategorySerializer, DistrictSerializer
 from core.validators import validate_image_size
 from users.models import User
 
-from .models import Response, Task, TaskPhoto
+from .models import Response, Review, Task, TaskPhoto
 
 
 class TaskPhotoSerializer(serializers.ModelSerializer):
@@ -159,3 +159,13 @@ class ResponseSerializer(serializers.ModelSerializer):
 
 class SelectExecutorSerializer(serializers.Serializer):
     response = serializers.IntegerField()
+
+
+class ReviewSerializer(serializers.ModelSerializer):
+    author = TaskUserSerializer(read_only=True)
+    rating = serializers.IntegerField(min_value=1, max_value=5)
+
+    class Meta:
+        model = Review
+        fields = ["id", "task", "author", "rating", "text", "created_at"]
+        read_only_fields = ["task"]

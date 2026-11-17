@@ -1,7 +1,7 @@
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext as _
-from rest_framework import mixins, status, viewsets
+from rest_framework import generics, mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
@@ -13,9 +13,10 @@ from users.permissions import IsExecutor
 
 from . import services
 from .models import Response as TaskResponse
-from .models import Task
+from .models import Review, Task
 from .serializers import (
     ResponseSerializer,
+    ReviewSerializer,
     SelectExecutorSerializer,
     TaskPhotoSerializer,
     TaskSerializer,
@@ -73,6 +74,8 @@ class TaskViewSet(
             return TaskPhotoSerializer
         if self.action == "responses":
             return ResponseSerializer
+        if self.action == "reviews":
+            return ReviewSerializer
         return TaskSerializer
 
     def create(self, request, *args, **kwargs):
@@ -180,6 +183,13 @@ class TaskViewSet(
         task = services.report_no_show(self.get_object().pk, request.user)
         return Response(self._read(task))
 
+    @action(detail=True, methods=["post"])
+    def reviews(self, request, pk=None):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        review = services.leave_review(self.get_object().pk, request.user, **serializer.validated_data)
+        return Response(self.get_serializer(review).data, status=status.HTTP_201_CREATED)
+
     def _get_own_open_task(self):
         task = self.get_object()
         if task.customer_id != self.request.user.id:
@@ -191,3 +201,16 @@ class TaskViewSet(
     def _read(self, task):
         task = tasks_with_details().get(pk=task.pk)
         return TaskSerializer(task, context=self.get_serializer_context()).data
+
+
+class ExecutorReviewListView(generics.ListAPIView):
+    """Reviews an executor got for their work."""
+
+    serializer_class = ReviewSerializer
+    pagination_class = NewestFirstPagination
+
+    def get_queryset(self):
+        executor_id = self.kwargs["user_id"]
+        return Review.objects.filter(target_id=executor_id, task__executor_id=executor_id).select_related(
+            "author"
+        )

@@ -1,5 +1,8 @@
+from datetime import timedelta
+from decimal import Decimal
+
 from django.db import transaction
-from django.db.models import Case, F, IntegerField, Value, When
+from django.db.models import Avg, Case, Count, F, IntegerField, Value, When
 from django.utils import timezone
 from django.utils.translation import gettext as _
 from rest_framework.exceptions import PermissionDenied, ValidationError
@@ -7,8 +10,9 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 from core.exceptions import WrongStatus
 from core.models import PlatformSettings
 from users.models import ExecutorProfile, User
+from users.profile import refresh_trust_level
 
-from .models import Response, Task
+from .models import Response, Review, Task
 
 # Who is allowed to respond to tasks with a big budget.
 TRUSTED_LEVELS = {User.TrustLevel.VERIFIED, User.TrustLevel.RELIABLE}
@@ -108,6 +112,7 @@ def complete_task(task_id: int, user: User) -> Task:
     task.save(update_fields=["status", "completed_at", "updated_at"])
 
     ExecutorProfile.objects.filter(user_id=task.executor_id).update(completed_count=F("completed_count") + 1)
+    refresh_trust_level(task.executor)
     return task
 
 
@@ -139,3 +144,50 @@ def report_no_show(task_id: int, customer: User) -> Task:
     task.assigned_at = None
     task.save(update_fields=["executor", "status", "assigned_at", "updated_at"])
     return task
+
+
+@transaction.atomic
+def leave_review(task_id: int, author: User, rating: int, text: str = "") -> Review:
+    task = _lock_task(task_id)
+    if not task.is_participant(author):
+        raise PermissionDenied
+    _check_status(task, Task.Status.COMPLETED)
+
+    review_days = PlatformSettings.load().review_days
+    if task.completed_at < timezone.now() - timedelta(days=review_days):
+        raise WrongStatus(_("The time for a review is over."))
+    if task.reviews.filter(author=author).exists():
+        raise ValidationError(_("You have already left a review."))
+
+    target_id = task.executor_id if author.id == task.customer_id else task.customer_id
+    review = Review.objects.create(task=task, author=author, target_id=target_id, rating=rating, text=text)
+
+    if target_id == task.executor_id:
+        update_executor_rating(task.executor)
+
+    # Both sides are done, nothing else can happen with the task.
+    if task.reviews.count() == 2:
+        task.status = Task.Status.CLOSED
+        task.save(update_fields=["status", "updated_at"])
+    return review
+
+
+def update_executor_rating(executor: User) -> None:
+    # Only reviews the user got as an executor count for the executor rating.
+    stats = Review.objects.filter(target=executor, task__executor=executor).aggregate(
+        avg=Avg("rating"), count=Count("id")
+    )
+    profile, _created = ExecutorProfile.objects.get_or_create(user=executor)
+    profile.rating = Decimal(stats["avg"] or 0).quantize(Decimal("0.01"))
+    profile.reviews_count = stats["count"]
+    profile.save(update_fields=["rating", "reviews_count", "updated_at"])
+    refresh_trust_level(executor)
+
+
+def close_stale_tasks() -> int:
+    """Close completed tasks nobody reviewed in time. Run once a day."""
+    review_days = PlatformSettings.load().review_days
+    deadline = timezone.now() - timedelta(days=review_days)
+    return Task.objects.filter(status=Task.Status.COMPLETED, completed_at__lt=deadline).update(
+        status=Task.Status.CLOSED, updated_at=timezone.now()
+    )
