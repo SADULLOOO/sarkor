@@ -76,6 +76,8 @@ CACHES = {
     "default": {
         "BACKEND": "django_redis.cache.RedisCache",
         "LOCATION": os.getenv("REDIS_URL", "redis://127.0.0.1:6379/1"),
+        # Local Windows Redis is 5.x and doesn't speak RESP3.
+        "OPTIONS": {"CONNECTION_POOL_KWARGS": {"protocol": 2}},
     }
 }
 

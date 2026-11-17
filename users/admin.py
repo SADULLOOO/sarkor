@@ -2,11 +2,15 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.utils.translation import gettext_lazy as _
 
+from .forms import UserChangeForm, UserCreationForm
 from .models import User
 
 
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
+    form = UserChangeForm
+    add_form = UserCreationForm
+
     list_display = ("phone", "name", "is_customer", "is_executor", "trust_level", "is_blocked", "date_joined")
     list_filter = ("is_customer", "is_executor", "trust_level", "is_blocked", "is_staff")
     search_fields = ("phone", "name")
@@ -23,8 +27,11 @@ class UserAdmin(BaseUserAdmin):
     )
 
     add_fieldsets = (
-        (None, {
-            "classes": ("wide",),
-            "fields": ("phone", "password1", "password2"),
-        }),
+        (
+            None,
+            {
+                "classes": ("wide",),
+                "fields": ("phone", "password1", "password2"),
+            },
+        ),
     )
