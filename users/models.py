@@ -70,7 +70,6 @@ class ExecutorProfile(models.Model):
     experience_years = models.PositiveSmallIntegerField(null=True, blank=True)
     available_now = models.BooleanField(default=False)
 
-    # Updated from reviews and finished tasks, not edited by the user.
     rating = models.DecimalField(max_digits=3, decimal_places=2, default=0)
     reviews_count = models.PositiveIntegerField(default=0)
     completed_count = models.PositiveIntegerField(default=0)

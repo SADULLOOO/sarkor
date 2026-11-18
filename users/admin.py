@@ -20,7 +20,6 @@ class UserAdmin(BaseUserAdmin):
     inlines = [ExecutorProfileInline]
 
     def get_inlines(self, request, obj):
-        # Only phone and password on the "add user" page.
         return self.inlines if obj else []
 
     list_display = ("phone", "name", "is_customer", "is_executor", "trust_level", "is_blocked", "date_joined")

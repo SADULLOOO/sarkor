@@ -6,7 +6,6 @@ PROFILE_FILLED_THRESHOLD = 80
 RELIABLE_MIN_COMPLETED = 10
 RELIABLE_MIN_RATING = Decimal("4.5")
 
-# What makes an executor profile "complete" and how much each part is worth.
 COMPLETENESS_WEIGHTS = {
     "name": 20,
     "photo": 20,
@@ -33,7 +32,6 @@ def get_completeness(profile: ExecutorProfile) -> tuple[int, list[str]]:
 
 
 def _is_reliable(profile: ExecutorProfile | None) -> bool:
-    # TODO: also require "no confirmed complaints in 90 days" once complaints exist.
     return (
         profile is not None
         and profile.completed_count >= RELIABLE_MIN_COMPLETED

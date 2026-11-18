@@ -84,5 +84,4 @@ def _register_failed_attempt(phone: str) -> None:
     cache.add(attempts_key, 0, OTP_LOCK_TIME)
     if cache.incr(attempts_key) >= OTP_MAX_ATTEMPTS:
         cache.set(_lock_key(phone), True, OTP_LOCK_TIME)
-        # The old code must not work after the lock, the user has to request a new one.
         cache.delete_many([_code_key(phone), attempts_key])
