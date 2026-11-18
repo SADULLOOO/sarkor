@@ -1,0 +1,10 @@
+[tool.ruff]
+line-length = 110
+extend-exclude = ["migrations"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "server.settings"
+python_files = ["test_*.py", "tests.py"]
